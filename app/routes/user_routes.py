@@ -4,6 +4,8 @@ from flasgger import swag_from
 from app.repositories.user_repository import UserRepository
 from app.services.user_service import UserService
 from app.dtos.user import UserOutputDTO
+from app.tools.response import Response
+from app.dtos.response import ResponseDTO
 
 user_routes = Blueprint("user_routes", __name__)
 
@@ -32,11 +34,10 @@ def before_request():
     }
 )
 def get_user_by_email(email):
-    user = g.user_service.get_user_by_email(email)
-    if not user:
-        return jsonify({"message": "User not found"}), 404
-    mapped = UserOutputDTO().dump(user)
-    return mapped
+    res: Response = g.user_service.get_user_by_email(email)
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, UserOutputDTO), 200
 
 
 @user_routes.get("/get-by-id/<id>")
@@ -58,12 +59,10 @@ def get_user_by_email(email):
     }
 )
 def get_user_by_id(id):
-    user = g.user_service.get_user_by_id(id)
-    if not user:
-        return jsonify({"message": "User not found"}), 404
-    print(user)
-    mapped = UserOutputDTO().dump(user)
-    return mapped
+    res: Response = g.user_service.get_user_by_id(id)
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, UserOutputDTO), 200
 
 
 @user_routes.post("/")
@@ -118,14 +117,12 @@ def get_user_by_id(id):
 )
 def create_user():
     data = request.get_json()
-    try:
-        user = g.user_service.create_user(
-            data["name"], data["nickname"], data["email"], data["password"]
-        )
-        mapped = UserOutputDTO().dump(user)
-        return mapped
-    except Exception as e:
-        return {"errors": e}
+    res: Response = g.user_service.create_user(
+        data["name"], data["nickname"], data["email"], data["password"]
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, UserOutputDTO), 200
 
 
 @user_routes.put("/")
@@ -161,12 +158,10 @@ def create_user():
     }
 )
 def update_user():
-    try:
-        data = request.get_json()
-        user = g.user_service.update_user(
-            data["id"], data["name"], data["nickname"], data["password"]
-        )
-        mapped = UserOutputDTO().dump(user)
-        return mapped
-    except Exception as e:
-        return {"errors": e}
+    data = request.get_json()
+    res: Response = g.user_service.update_user(
+        data["id"], data["name"], data["nickname"], data["password"]
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, UserOutputDTO), 200

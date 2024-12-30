@@ -1,10 +1,17 @@
-from flask import request, Blueprint, jsonify, g
+from flask import request, Blueprint, g
 from flasgger import swag_from
 from app.repositories.user_repository import UserRepository
 from app.repositories.game_repository import GameRepository
 from app.services.game_service import GameService
 from app.models.game import GamePlatform
-from app.dtos.game import GameInputDTO, GameOutputDTO
+from app.dtos.game import (
+    GameInputDTO,
+    GameDetailOutputDTO,
+    GameThumbnailOutputDTO,
+    GamePagingDTO,
+)
+from app.tools.response import Response
+from app.dtos.response import ResponseDTO
 
 game_routes = Blueprint("game_routes", __name__)
 
@@ -16,28 +23,63 @@ def before_request():
     g.game_service = GameService(g.game_repo, g.user_repo)
 
 
-@game_routes.get("/get-all")
-@swag_from(
-    {
-        "tags": ["Games"],
-        "responses": {
-            "200": {"description": "get test"},
-        },
-    }
-)
-def get_games():
-    games = g.game_service.get_games()
-    mapped = GameOutputDTO(many=True).dump(games)
-    return mapped
-
-
-@game_routes.get("/get-by-id/<id>")
+@game_routes.get("/get-game-list")
 @swag_from(
     {
         "tags": ["Games"],
         "parameters": [
             {
-                "name": "id",
+                "name": "tags",
+                "in": "query",
+                "required": False,
+                "type": "array",
+                "items": {"type": "string"},
+                "collectionFormat": "multi",
+            },
+            {
+                "name": "game_engine",
+                "in": "query",
+                "required": False,
+                "type": "string",
+            },
+            {
+                "name": "current_page",
+                "in": "query",
+                "required": False,
+                "type": "integer",
+            },
+            {
+                "name": "page_size",
+                "in": "query",
+                "required": False,
+                "type": "integer",
+            },
+        ],
+        "responses": {
+            "200": {"description": "get test"},
+        },
+    }
+)
+def get_games_by_page():
+    res: Response = g.game_service.get_game_by_page(
+        request.args.get("current_page"),
+        request.args.get("page_size"),
+        request.args.getlist("tags"),
+        request.args.getlist("game_engine"),
+        None,
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return jsonify(ResponseDTO.convert(res, GamePagingDTO)), 200
+
+
+@game_routes.get("/detail/<game_id>")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [
+            {
+                "name": "game_id",
                 "in": "path",
                 "required": True,
                 "type": "string",
@@ -49,12 +91,11 @@ def get_games():
         },
     }
 )
-def get_game_by_id(id):
-    game = g.game_service.get_game_by_id(id)
-    if not game:
-        return jsonify({"message": "game not found"}), 404
-    mapped = GameOutputDTO().dump(game)
-    return mapped
+def get_game_by_id(game_id):
+    res: Response = g.game_service.get_game_by_id(game_id)
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 200
 
 
 @game_routes.post("/")
@@ -86,6 +127,12 @@ def get_game_by_id(id):
                 "type": "string",
             },
             {
+                "name": "game_engine",
+                "in": "formData",
+                "required": True,
+                "type": "string",
+            },
+            {
                 "name": "embedded_link",
                 "in": "formData",
                 "required": True,
@@ -104,31 +151,23 @@ def get_game_by_id(id):
                 "required": True,
                 "type": "file",
             },
+            {
+                "name": "game_content",
+                "in": "formData",
+                "required": False,
+                "type": "file",
+            },
         ],
         "responses": {
             "201": {
                 "description": "User created successfully",
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "message": {"type": "string"},
-                                "user_id": {"type": "integer"},
-                            },
-                            "example": {
-                                "message": "User created successfully",
-                                "user_id": 1234,
-                            },
-                        }
-                    }
-                },
             },
             "400": {"description": "Invalid data"},
         },
     }
 )
 def create_game():
+    print(request.files)
     converted_form = {
         "publisher_id": request.form.get("publisher_id"),
         "tags": request.form.getlist("tags"),
@@ -136,12 +175,117 @@ def create_game():
         "description": request.form.get("description"),
         "embedded_link": request.form.get("embedded_link"),
         "platform": request.form.get("platform"),
-        "thumbnail": request.files["thumbnail"],
+        "game_engine": request.form.get("game_engine"),
+        "thumbnail": request.files.get("thumbnail"),
+        "game_content": request.files.get("game_content"),
     }
     data = GameInputDTO().load(converted_form)
-    try:
-        game = g.game_service.create_game(data)
-        mapped = GameOutputDTO().dump(game)
-        return mapped
-    except Exception as e:
-        return {"errors": str(e)}, 400
+    res: Response = g.game_service.create_game(data)
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 201
+
+
+@game_routes.put("/upvote")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [
+            {"name": "game_id", "in": "query", "type": "string"},
+            {"name": "user_id", "in": "query", "type": "string"},
+        ],
+        "responses": {"200": {"description": "Game upvoted"}},
+    }
+)
+def upvote_game():
+    res: Response = g.game_service.upvote_game(
+        request.args.get("game_id"), request.args.get("user_id")
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 200
+
+
+@game_routes.put("/downvote")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [
+            {"name": "game_id", "in": "query", "type": "string"},
+            {"name": "user_id", "in": "query", "type": "string"},
+        ],
+        "responses": {"200": {"description": "Game downvoted"}},
+    }
+)
+def downvote_game():
+    res: Response = g.game_service.downvote_game(
+        request.args.get("game_id"), request.args.get("user_id")
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 200
+
+
+@game_routes.put("/upvote/comment")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [
+            {"name": "game_id", "in": "query", "type": "string"},
+            {"name": "user_id", "in": "query", "type": "string"},
+            {"name": "comment_id", "in": "query", "type": "string"},
+        ],
+        "responses": {"200": {"description": "Comment upvoted"}},
+    }
+)
+def upvote_comment():
+    res: Response = g.game_service.upvote_game_comment(
+        request.args.get["game_id"],
+        request.args.get["user_id"],
+        request.args.get["comment_id"],
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 200
+
+
+@game_routes.put("/downvote/comment")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [
+            {"name": "game_id", "in": "query", "type": "string"},
+            {"name": "user_id", "in": "query", "type": "string"},
+            {"name": "comment_id", "in": "query", "type": "string"},
+        ],
+        "responses": {"200": {"description": "Comment downvoted"}},
+    }
+)
+def downvote_comment():
+    res: Response = g.game_service.downvote_game_comment(
+        request.args.get["game_id"],
+        request.args.get["user_id"],
+        request.args.get["comment_id"],
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 200
+
+
+@game_routes.delete("/<game_id>")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [{"name": "game_id", "in": "path", "type": "string"}],
+        "responses": {
+            "200": {"description": "Game deleted"},
+            "400": {"description": "Invalid data"},
+        },
+    }
+)
+def delete_game(game_id):
+    res: Response = g.game_service.delete_game(game_id)
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    else:
+        return ResponseDTO.convert(res), 200
