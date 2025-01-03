@@ -1,5 +1,5 @@
 from flask import request, Blueprint, g
-from flask_jwt_extended import jwt_required, get_current_user, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from flasgger import swag_from
 from app.repositories.user_repository import UserRepository
 from app.repositories.game_repository import GameRepository
@@ -286,14 +286,15 @@ def add_comment():
         "tags": ["Games"],
         "parameters": [
             {"name": "game_id", "in": "query", "type": "string"},
-            {"name": "user_id", "in": "query", "type": "string"},
         ],
         "responses": {"200": {"description": "Game upvoted"}},
     }
 )
+@jwt_required()
 def upvote_game():
+    user_id = get_jwt_identity()
     res: Response = g.game_service.upvote_game(
-        request.args.get("game_id"), request.args.get("user_id")
+        request.args.get("game_id"), user_id
     )
     if not res.result:
         return ResponseDTO.convert(res), 404
@@ -306,14 +307,15 @@ def upvote_game():
         "tags": ["Games"],
         "parameters": [
             {"name": "game_id", "in": "query", "type": "string"},
-            {"name": "user_id", "in": "query", "type": "string"},
         ],
         "responses": {"200": {"description": "Game downvoted"}},
     }
 )
+@jwt_required()
 def downvote_game():
+    user_id = get_jwt_identity()
     res: Response = g.game_service.downvote_game(
-        request.args.get("game_id"), request.args.get("user_id")
+        request.args.get("game_id"), user_id
     )
     if not res.result:
         return ResponseDTO.convert(res), 404
@@ -326,16 +328,17 @@ def downvote_game():
         "tags": ["Games"],
         "parameters": [
             {"name": "game_id", "in": "query", "type": "string"},
-            {"name": "user_id", "in": "query", "type": "string"},
             {"name": "comment_id", "in": "query", "type": "string"},
         ],
         "responses": {"200": {"description": "Comment upvoted"}},
     }
 )
+@jwt_required()
 def upvote_comment():
+    user_id = get_jwt_identity()
     res: Response = g.game_service.upvote_game_comment(
         request.args.get["game_id"],
-        request.args.get["user_id"],
+        user_id,
         request.args.get["comment_id"],
     )
     if not res.result:
@@ -349,16 +352,17 @@ def upvote_comment():
         "tags": ["Games"],
         "parameters": [
             {"name": "game_id", "in": "query", "type": "string"},
-            {"name": "user_id", "in": "query", "type": "string"},
             {"name": "comment_id", "in": "query", "type": "string"},
         ],
         "responses": {"200": {"description": "Comment downvoted"}},
     }
 )
+@jwt_required()
 def downvote_comment():
+    user_id = get_jwt_identity()
     res: Response = g.game_service.downvote_game_comment(
         request.args.get["game_id"],
-        request.args.get["user_id"],
+        user_id,
         request.args.get["comment_id"],
     )
     if not res.result:

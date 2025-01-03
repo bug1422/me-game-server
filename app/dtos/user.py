@@ -6,3 +6,4 @@ class UserOutputDTO(Schema):
     name = fields.Str()
     nickname = fields.Str()
     email = fields.Email()
+    roles = fields.List(fields.String())

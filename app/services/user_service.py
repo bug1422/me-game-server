@@ -33,8 +33,8 @@ class UserService:
 
     @handle_response
     def create_user(
-        self, name: str, nickname: str, email: str, password: str
-    ) -> User | List[str]:
+        self, name: str, nickname: str, email: str, password: str, roles
+    ):
         if not re.search("^[^@]+@[^@]+\.[^@]+$", email):
             raise Exception("Invalid email address")
         elif self.user_repo.get_by_email(email):
@@ -44,9 +44,30 @@ class UserService:
             nickname=nickname,
             email=email,
             password=self._hash_password(password),
+            roles=roles
         )
         self.user_repo.add(user)
         return self._create_access_token(user)
+
+    @handle_response
+    def add_role(
+        self, user_id: str, role: str
+    ):
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise Exception("User not found")
+        user.add_role(role)
+        return user
+    
+    @handle_response
+    def delete_role(
+        self, user_id: str, role: str
+    ):
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise Exception("User not found")
+        user.remove_role(role)
+        return user
 
     @handle_response
     def update_user(self, id: str, name: str, nickname: str, password: str) -> User:
@@ -64,6 +85,7 @@ class UserService:
         if not user or not self._check_password(user.password, password):
             raise Exception("Incorrect email, nickname or password")
         return self._create_access_token(user)
+
 
     def _create_access_token(self, user):
         claims = {
