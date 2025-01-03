@@ -1,21 +1,36 @@
-from flask_bcrypt import Bcrypt
-from flask import request, Blueprint, jsonify, current_app, g
+from flask import request, Blueprint, jsonify, g
+from flask_jwt_extended import get_jwt_identity,get_jwt,jwt_required
 from flasgger import swag_from
 from app.repositories.user_repository import UserRepository
 from app.services.user_service import UserService
 from app.dtos.user import UserOutputDTO
 from app.tools.response import Response
 from app.dtos.response import ResponseDTO
+from app.dtos.token import JwtTokenInputDTO
 
 user_routes = Blueprint("user_routes", __name__)
 
 
 @user_routes.before_request
 def before_request():
-    g.bcrypt = Bcrypt(current_app)
     g.user_repo = UserRepository()
-    g.user_service = UserService(g.user_repo, g.bcrypt)
+    from app import bcrypt
 
+    g.user_service = UserService(g.user_repo, bcrypt)
+
+
+@user_routes.get("/test-jwt")
+@swag_from(
+    {
+        "tags": ["Tets"],
+        "responses": {"200": {"description": "get test"}},
+    }
+)
+@jwt_required()
+def get_claims_in_jwt():
+    claims = get_jwt()
+    token = JwtTokenInputDTO().load(claims)
+    return jsonify(token), 200
 
 @user_routes.get("/get-by-email/<email>")
 @swag_from(
@@ -30,7 +45,7 @@ def before_request():
                 "type": "string",
             }
         ],
-        "responses": {"200": {"description": "get test"}},
+        "responses": {"200": {"description": "get"}},
     }
 )
 def get_user_by_email(email):
@@ -65,7 +80,30 @@ def get_user_by_id(id):
     return ResponseDTO.convert(res, UserOutputDTO), 200
 
 
-@user_routes.post("/")
+@user_routes.get("/login")
+@swag_from(
+    {
+        "tags": ["Users"],
+        "parameters": [
+            {"name": "identifier", "in": "query", "required": True, "type": "string"},
+            {"name": "password", "in": "query", "required": True, "type": "string"},
+        ],
+        "responses": {
+            "200": {"description": "get test"},
+            "404": {"description": "User not found"},
+        },
+    }
+)
+def login():
+    res: Response = g.user_service.login(
+        request.args.get("identifier"), request.args.get("password")
+    )
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return jsonify(res.response)
+
+
+@user_routes.post("/register")
 @swag_from(
     {
         "tags": ["Users"],
@@ -122,7 +160,7 @@ def create_user():
     )
     if not res.result:
         return ResponseDTO.convert(res), 404
-    return ResponseDTO.convert(res, UserOutputDTO), 200
+    return jsonify(res.response)
 
 
 @user_routes.put("/")

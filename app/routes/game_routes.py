@@ -1,4 +1,5 @@
 from flask import request, Blueprint, g
+from flask_jwt_extended import jwt_required, get_current_user, get_jwt_identity
 from flasgger import swag_from
 from app.repositories.user_repository import UserRepository
 from app.repositories.game_repository import GameRepository
@@ -9,7 +10,10 @@ from app.dtos.game import (
     GameDetailOutputDTO,
     GameThumbnailOutputDTO,
     GamePagingDTO,
+    GameChangeLogInputDTO,
+    GameChangeLogOutputDTO,
 )
+from app.dtos.comment import CommentInputDto
 from app.tools.response import Response
 from app.dtos.response import ResponseDTO
 
@@ -70,7 +74,7 @@ def get_games_by_page():
     )
     if not res.result:
         return ResponseDTO.convert(res), 404
-    return jsonify(ResponseDTO.convert(res, GamePagingDTO)), 200
+    return ResponseDTO.convert(res, GamePagingDTO), 200
 
 
 @game_routes.get("/detail/<game_id>")
@@ -181,6 +185,96 @@ def create_game():
     }
     data = GameInputDTO().load(converted_form)
     res: Response = g.game_service.create_game(data)
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 201
+
+
+@game_routes.post("/add-log")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [
+            {
+                "name": "log",
+                "in": "body",
+                "description": "Game log data",
+                "required": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "game_id": {
+                            "type": "string",
+                            "required": True,
+                        },
+                        "version": {
+                            "type": "string",
+                            "required": True,
+                        },
+                        "log": {
+                            "type": "string",
+                            "required": False,
+                        },
+                    },
+                },
+                "example": {
+                    "game_id": "1220981209123",
+                    "version": "1.0.0",
+                    "log": "default update",
+                },
+            }
+        ],
+        "responses": {
+            "201": {
+                "description": "Log created successfully",
+            },
+            "400": {"description": "Invalid data"},
+        },
+    }
+)
+@jwt_required()
+def add_log():
+    data = request.get_json()
+    game_log = GameChangeLogInputDTO().dump(data)
+    res: Response = g.game_service.add_log(data["game_id"], game_log)
+    if not res.result:
+        return ResponseDTO.convert(res), 404
+    return ResponseDTO.convert(res, GameDetailOutputDTO), 201
+
+
+@game_routes.post("/add-comment")
+@swag_from(
+    {
+        "tags": ["Games"],
+        "parameters": [
+            {
+                "name": "comment",
+                "in": "body",
+                "required": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "game_id": {"type": "string", "required": True},
+                        "parent_id": {"type": "string", "required": False},
+                        "content": {"type": "string", "required": True},
+                    },
+                },
+            }
+        ],
+        "responses": {
+            "201": {"description": "comment created"},
+            "400": {"description": "Invalid data"},
+        },
+    }
+)
+@jwt_required()
+def add_comment():
+    user_id = get_jwt_identity()
+    game_json = request.get_json()
+    comment_input = CommentInputDto().load(game_json)
+    res: Response = g.game_service.add_comment(
+        game_json["game_id"], user_id, comment_input
+    )
     if not res.result:
         return ResponseDTO.convert(res), 404
     return ResponseDTO.convert(res, GameDetailOutputDTO), 201

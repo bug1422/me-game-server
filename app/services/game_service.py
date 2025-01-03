@@ -1,7 +1,7 @@
 from app.repositories.user_repository import UserRepository
 from app.repositories.game_repository import GameRepository
-from app.dtos.game import GameInputDTO
-from app.models.game import Game
+from app.dtos.game import GameInputDTO,GameChangeLogInputDTO
+from app.models.game import Game, GameChangeLog
 from app.models.comment import Comment
 from typing import List
 from bson import ObjectId
@@ -76,16 +76,26 @@ class GameService:
         if len(game.comments.filter(user_id=user_id)) > 1:
             raise Exception("You have reached limit")
         comment = Comment(content=comment_input["content"], user_id=user_id)
-        parent_comment_id = comment_input["parent_id"]
+        parent_comment_id = comment_input.get('parent_id',None)
+        print(parent_comment_id)
         if parent_comment_id:
             parent_coment = game.comments.filter(id=parent_comment_id)
             if not parent_coment:
-                return Response.fail("Parent comment not found")
+                raise Exception("Parent comment not found")
             comment.parent_id = parent_comment_id
             comment.sub_thread_count = parent_coment.sub_thread_count + 1
         game.comments.append(comment)
         game.save()
         return Response.success("Added successfully", game)
+
+    @handle_response
+    def add_log(self, game_id: str, game_log: GameChangeLogInputDTO):
+        game = self.game_repo.get_by_id(game_id)
+        if not game:
+            raise Exception("Game not found")
+        major, minor, patch = map(int, game_log['version'].split("."))
+        game.add_change_log(major,minor,patch,game_log['log'])
+        return game
 
     @handle_response
     def delete_comment(self, game_id, user_id, comment_id):

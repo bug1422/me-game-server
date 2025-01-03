@@ -3,8 +3,13 @@ from typing import List
 from app.repositories.user_repository import UserRepository
 from app.models.user import User
 from flask_bcrypt import Bcrypt
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+)
 from app.tools.response import Response
 from app.tools.wrapper.handle_response import handle_response
+from datetime import datetime, timezone, timedelta
 
 
 class UserService:
@@ -40,7 +45,8 @@ class UserService:
             email=email,
             password=self._hash_password(password),
         )
-        return self.user_repo.add(user)
+        self.user_repo.add(user)
+        return self._create_access_token(user)
 
     @handle_response
     def update_user(self, id: str, name: str, nickname: str, password: str) -> User:
@@ -52,8 +58,25 @@ class UserService:
         self.user_repo.update(user)
         return None
 
+    @handle_response
+    def login(self, identifier: str, password: str):
+        user = self.user_repo.get_by_email_or_nickname(identifier)
+        if not user or not self._check_password(user.password, password):
+            raise Exception("Incorrect email, nickname or password")
+        return self._create_access_token(user)
+
+    def _create_access_token(self, user):
+        claims = {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "exp_date": (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(),
+        }
+        token = create_access_token(identity=user.id, additional_claims=claims)
+        return {"access_token": token}
+
     def _hash_password(self, password):
         return self.bcrypt.generate_password_hash(password).decode("utf-8")
 
-    def _check_password(self, hash, password):
-        return self.bcrypt.check_password_hash(hash, password)
+    def _check_password(self, hashed, password):
+        return self.bcrypt.check_password_hash(hashed, password)

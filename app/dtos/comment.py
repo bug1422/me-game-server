@@ -1,10 +1,13 @@
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, EXCLUDE
 from app.dtos.voter import VoterOutputDTO
 
 
 class CommentInputDto(Schema):
+    game_id = fields.String(required=True)
     parent_id = fields.String(required=False)
     content = fields.String(required=True)
+    class Meta:
+        unknown = EXCLUDE
 
 
 class CommentOutputDto(Schema):
