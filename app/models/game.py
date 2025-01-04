@@ -19,7 +19,7 @@ class GameChangeLog(me.EmbeddedDocument):
 
 
 class Game(me.Document):
-    publisher = me.ReferenceField("User")
+    publisher_id = me.ObjectIdField(required=True)
     platform = me.EnumField(GamePlatform, default=GamePlatform.ITCH)
     game_engine = me.StringField(required=True)
     title = me.StringField()
@@ -36,6 +36,7 @@ class Game(me.Document):
     scores = me.EmbeddedDocumentListField(UserScore, default=[])
     removed_at = me.DateTimeField(required=False, default=None)
     embedded_link = me.StringField(required=False, default=None)
+    ref_link = me.StringField(required=False, default=None)
     thumbnail = me.FileField(collection_name="image")
     game_content = me.FileField(collection_name="game_content")
     change_logs = me.EmbeddedDocumentListField(GameChangeLog, default=[])
@@ -53,4 +54,15 @@ class Game(me.Document):
                 raise me.ValidationError(f"This version {major}.{minor}.{patch} isn't the latest")
         print(log)
         self.change_logs.append(GameChangeLog(major=major, minor=minor, patch=patch, log=log))
+        self.save()
+
+    def add_comment(self, parent_comment_id, content, user):
+        comment = Comment(content=content, user_id=user.id,nickname=user.nickname,email=user.email)
+        if parent_comment_id:
+            parent_coment = self.comments.filter(id=parent_comment_id)
+            if not parent_coment:
+                raise Exception("Parent comment not found")
+            comment.parent_id = parent_comment_id
+            comment.sub_thread_count = parent_coment.sub_thread_count + 1
+        self.comments.append(comment)
         self.save()

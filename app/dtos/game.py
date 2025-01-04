@@ -8,7 +8,8 @@ class GameInputDTO(Schema):
     publisher_id = fields.String(required=True)
     title = fields.String(required=True)
     description = fields.String(required=True)
-    embedded_link = fields.String(required=True)
+    embedded_link = fields.String(required=False)
+    ref_link = fields.String(required=False)
     game_engine = fields.String(required=True)
     game_content = fields.Field(
         metadata={"type": "string", "format": "byte"}, allow_none=True
@@ -70,6 +71,7 @@ class GameDetailOutputDTO(Schema):
     played_count = fields.Number()
     created_at = fields.DateTime()
     embedded_link = fields.String()
+    ref_link = fields.String()
     game_content = GridFSField()
     change_logs = fields.List(fields.Nested(GameChangeLogOutputDTO))
     comments = fields.List(fields.Nested(CommentOutputDto))

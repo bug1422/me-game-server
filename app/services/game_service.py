@@ -75,17 +75,7 @@ class GameService:
             raise Exception("User not found")
         if len(game.comments.filter(user_id=user_id)) > 1:
             raise Exception("You have reached limit")
-        comment = Comment(content=comment_input["content"], user_id=user_id)
-        parent_comment_id = comment_input.get('parent_id',None)
-        print(parent_comment_id)
-        if parent_comment_id:
-            parent_coment = game.comments.filter(id=parent_comment_id)
-            if not parent_coment:
-                raise Exception("Parent comment not found")
-            comment.parent_id = parent_comment_id
-            comment.sub_thread_count = parent_coment.sub_thread_count + 1
-        game.comments.append(comment)
-        game.save()
+        game.add_comment(comment_input.get('parent_id',None),comment_input["content"],user)
         return Response.success("Added successfully", game)
 
     @handle_response
